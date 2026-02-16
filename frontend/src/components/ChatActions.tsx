@@ -60,16 +60,17 @@ export function ChatActions() {
           </div>
         );
       }
-      if (!result) return null;
+      const data = result?.data || result;
+      if (!data?.totalUsd) return null;
       return (
         <div className="space-y-3 my-2">
           <PortfolioCard
-            data={result}
-            action={<PinButton type="portfolio" data={result} />}
+            data={data}
+            action={<PinButton type="portfolio" data={data} />}
           />
           <DonutChart
-            data={result}
-            action={<PinButton type="donut" data={result} />}
+            data={data}
+            action={<PinButton type="donut" data={data} />}
           />
         </div>
       );
@@ -93,12 +94,13 @@ export function ChatActions() {
           </div>
         );
       }
-      if (!result) return null;
+      const data = result?.data || result;
+      if (!data || typeof data !== "object") return null;
       return (
         <div className="my-2">
           <PriceCards
-            data={result}
-            action={<PinButton type="prices" data={result} />}
+            data={data}
+            action={<PinButton type="prices" data={data} />}
           />
         </div>
       );
@@ -122,12 +124,13 @@ export function ChatActions() {
           </div>
         );
       }
-      if (!result) return null;
+      const data = result?.data || result;
+      if (!data) return null;
       return (
         <div className="my-2">
           <OrderTable
-            data={result}
-            action={<PinButton type="orders" data={result} />}
+            data={Array.isArray(data) ? data : []}
+            action={<PinButton type="orders" data={data} />}
           />
         </div>
       );
@@ -151,12 +154,13 @@ export function ChatActions() {
           </div>
         );
       }
-      if (!result) return null;
+      const data = result?.data || result;
+      if (!data) return null;
       return (
         <div className="my-2">
           <TradeHistory
-            data={result}
-            action={<PinButton type="trades" data={result} />}
+            data={Array.isArray(data) ? data : []}
+            action={<PinButton type="trades" data={data} />}
           />
         </div>
       );
