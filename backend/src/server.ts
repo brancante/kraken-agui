@@ -178,23 +178,8 @@ app.post("/awp", async (req, res) => {
     const toolName = detectTool(userText) || "getPortfolioSummary";
     const toolCallId = uuidv4();
 
-    // TOOL_CALL_START
-    sseWrite(res, {
-      type: "TOOL_CALL_START",
-      toolCallId,
-      toolCallName: toolName,
-    });
-
-    // Execute tool
+    // Execute tool first (before announcing it)
     const toolResult = await executeTool(toolName, {});
-
-    // TOOL_CALL_END
-    sseWrite(res, {
-      type: "TOOL_CALL_END",
-      toolCallId,
-      toolCallName: toolName,
-      result: JSON.stringify(toolResult),
-    });
 
     // Generate text response
     const responseText = generateResponse(toolName, toolResult);
@@ -218,15 +203,6 @@ app.post("/awp", async (req, res) => {
       });
       await new Promise((r) => setTimeout(r, 15));
     }
-
-    // Also emit custom state with raw data for rich UI rendering
-    sseWrite(res, {
-      type: "STATE_SNAPSHOT",
-      snapshot: {
-        toolName,
-        data: toolResult,
-      },
-    });
 
     // TEXT_MESSAGE_END
     sseWrite(res, {
