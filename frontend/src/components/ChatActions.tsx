@@ -13,14 +13,28 @@ const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 
 async function callTool(name: string) {
-  const res = await fetch(`${BACKEND_URL}/api/tool/${name}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{}",
-  });
-  const json = await res.json();
-  if (!json.success) throw new Error(json.error);
-  return json.data;
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/tool/${name}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const json = await res.json();
+    if (!json.success) return { error: json.error || "Unknown error" };
+    return json.data;
+  } catch (err: any) {
+    return { error: `Failed to connect to backend: ${err.message}` };
+  }
+}
+
+function safeParse(result: any): any {
+  if (!result) return null;
+  if (typeof result !== "string") return result;
+  try {
+    return JSON.parse(result);
+  } catch {
+    return { error: result };
+  }
 }
 
 function PinButton({ type, data }: { type: string; data: any }) {
@@ -71,7 +85,8 @@ export function ChatActions() {
     render: ({ status, result }) => {
       if (status === "executing") return <LoadingSpinner text="Loading portfolio..." />;
       if (status !== "complete" || !result) return null;
-      const data = typeof result === "string" ? JSON.parse(result) : result;
+      const data = safeParse(result);
+      if (data?.error) return <div className="text-kraken-red text-sm my-2">❌ {data.error}</div>;
       if (!data?.totalUsd && !data?.assets) return null;
       return (
         <div className="space-y-3 my-2">
@@ -101,7 +116,8 @@ export function ChatActions() {
     render: ({ status, result }) => {
       if (status === "executing") return <LoadingSpinner text="Fetching prices..." />;
       if (status !== "complete" || !result) return null;
-      const data = typeof result === "string" ? JSON.parse(result) : result;
+      const data = safeParse(result);
+      if (data?.error) return <div className="text-kraken-red text-sm my-2">❌ {data.error}</div>;
       if (!data || typeof data !== "object") return null;
       return (
         <div className="my-2">
@@ -130,7 +146,8 @@ export function ChatActions() {
     render: ({ status, result }) => {
       if (status === "executing") return <LoadingSpinner text="Checking orders..." />;
       if (status !== "complete" || !result) return null;
-      const data = typeof result === "string" ? JSON.parse(result) : result;
+      const data = safeParse(result);
+      if (data?.error) return <div className="text-kraken-red text-sm my-2">❌ {data.error}</div>;
       return (
         <div className="my-2">
           <OrderTable data={Array.isArray(data) ? data : []} action={<PinButton type="orders" data={data} />} />
@@ -158,7 +175,8 @@ export function ChatActions() {
     render: ({ status, result }) => {
       if (status === "executing") return <LoadingSpinner text="Loading trade history..." />;
       if (status !== "complete" || !result) return null;
-      const data = typeof result === "string" ? JSON.parse(result) : result;
+      const data = safeParse(result);
+      if (data?.error) return <div className="text-kraken-red text-sm my-2">❌ {data.error}</div>;
       return (
         <div className="my-2">
           <TradeHistory data={Array.isArray(data) ? data : []} action={<PinButton type="trades" data={data} />} />
