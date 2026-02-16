@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --copilotkit-background-color: #141821;
+  --copilotkit-text-color: #E1E4E8;
+  --copilotkit-primary-color: #7B61FF;
+  --copilotkit-separator-color: #2A2F3E;
+  --copilotkit-response-button-background-color: #1A1F2E;
+  --copilotkit-response-button-color: #E1E4E8;
+}
+
+body {
+  background: #0B0E11;
+  color: #E1E4E8;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #141821;
+}
+::-webkit-scrollbar-thumb {
+  background: #2A2F3E;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3A3F4E;
+}
+
+/* Recharts dark */
+.recharts-text {
+  fill: #8B949E !important;
+}
