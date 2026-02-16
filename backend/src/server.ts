@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
+import OpenAI from "openai";
 import {
   getBalance,
   getTicker,
@@ -16,44 +17,58 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
 
-// Tool definitions
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Tool definitions for both AG-UI and OpenAI
 const TOOLS = [
   {
+    name: "getPortfolioSummary",
+    description:
+      "Get complete portfolio summary with total USD value, per-asset breakdown, and allocation. Use this when the user asks about their portfolio, holdings, total value, or wants an overview.",
+    parameters: { type: "object" as const, properties: {} },
+  },
+  {
     name: "getBalance",
-    description: "Get current portfolio balances from Kraken",
-    parameters: { type: "object", properties: {} },
+    description: "Get raw portfolio balances from Kraken. Use when user asks specifically about balances or how much of an asset they hold.",
+    parameters: { type: "object" as const, properties: {} },
   },
   {
     name: "getTicker",
-    description: "Get current prices for crypto assets",
+    description: "Get current market prices for crypto assets. Use when user asks about prices, market data, or specific coin values.",
     parameters: {
-      type: "object",
+      type: "object" as const,
       properties: {
         pairs: {
           type: "array",
           items: { type: "string" },
-          description: "Trading pairs like LINKUSD, SOLUSD, ETHUSD",
+          description: "Trading pairs like LINKUSD, SOLUSD, ETHUSD, XDGUSD. If not specified, returns common pairs.",
         },
       },
     },
   },
   {
     name: "getOpenOrders",
-    description: "Get pending/open orders on Kraken",
-    parameters: { type: "object", properties: {} },
+    description: "Get pending/open orders on Kraken. Use when user asks about open orders, pending orders, or limit orders.",
+    parameters: { type: "object" as const, properties: {} },
   },
   {
     name: "getTradeHistory",
-    description: "Get recent trade history/fills from Kraken",
-    parameters: { type: "object", properties: {} },
-  },
-  {
-    name: "getPortfolioSummary",
-    description:
-      "Get complete portfolio summary with total USD value and per-asset breakdown",
-    parameters: { type: "object", properties: {} },
+    description: "Get recent trade history/fills from Kraken. Use when user asks about recent trades, fills, or transaction history.",
+    parameters: { type: "object" as const, properties: {} },
   },
 ];
+
+// OpenAI function definitions
+const OPENAI_TOOLS: OpenAI.ChatCompletionTool[] = TOOLS.map((t) => ({
+  type: "function" as const,
+  function: {
+    name: t.name,
+    description: t.description,
+    parameters: t.parameters,
+  },
+}));
 
 // Execute a tool
 async function executeTool(name: string, args: any): Promise<any> {
@@ -73,113 +88,25 @@ async function executeTool(name: string, args: any): Promise<any> {
   }
 }
 
-// Simple AI-like response generator based on tool results
-function generateResponse(toolName: string, result: any): string {
-  switch (toolName) {
-    case "getBalance": {
-      const entries = Object.entries(result);
-      let text = "📊 **Portfolio Balances**\n\n";
-      for (const [asset, amount] of entries) {
-        text += `• **${asset}**: ${parseFloat(amount as string).toLocaleString("en-US", { maximumFractionDigits: 8 })}\n`;
-      }
-      return text;
-    }
-    case "getTicker": {
-      let text = "💹 **Current Prices**\n\n";
-      for (const [pair, data] of Object.entries(result) as any) {
-        const last = parseFloat(data.last);
-        const open = parseFloat(data.open24h);
-        const change = ((last - open) / open) * 100;
-        const arrow = change >= 0 ? "🟢" : "🔴";
-        text += `${arrow} **${pair}**: $${last.toLocaleString("en-US", { minimumFractionDigits: 2 })} (${change >= 0 ? "+" : ""}${change.toFixed(2)}%)\n`;
-      }
-      return text;
-    }
-    case "getOpenOrders": {
-      if (result.length === 0)
-        return "📋 **Open Orders**\n\nNo open orders found.";
-      let text = "📋 **Open Orders**\n\n";
-      for (const order of result) {
-        text += `• **${order.pair}** — ${order.type.toUpperCase()} ${order.volume} @ $${order.price} (${order.orderType}) — *${order.status}*\n`;
-      }
-      return text;
-    }
-    case "getTradeHistory": {
-      if (result.length === 0)
-        return "📜 **Trade History**\n\nNo recent trades found.";
-      let text = "📜 **Recent Trades**\n\n";
-      for (const trade of result.slice(0, 10)) {
-        text += `• **${trade.pair}** — ${trade.type.toUpperCase()} ${trade.volume} @ $${trade.price} ($${trade.cost}) — ${trade.time}\n`;
-      }
-      return text;
-    }
-    case "getPortfolioSummary": {
-      let text = `💰 **Portfolio Summary**\n\n**Total Value: $${result.totalUsd.toLocaleString("en-US", { minimumFractionDigits: 2 })}**\n\n`;
-      for (const a of result.assets) {
-        const pct =
-          result.totalUsd > 0
-            ? ((a.usdValue / result.totalUsd) * 100).toFixed(1)
-            : "0";
-        text += `• **${a.asset}**: ${a.quantity.toLocaleString("en-US", { maximumFractionDigits: 8 })} — $${a.usdValue.toLocaleString("en-US", { minimumFractionDigits: 2 })} (${pct}%)\n`;
-      }
-      text += `\n_Updated: ${result.updatedAt}_`;
-      return text;
-    }
-    default:
-      return JSON.stringify(result, null, 2);
-  }
+// Map tool names to frontend action names (widget types)
+const TOOL_TO_WIDGET: Record<string, string> = {
+  getPortfolioSummary: "showPortfolio",
+  getTicker: "showPrices",
+  getOpenOrders: "showOrders",
+  getTradeHistory: "showTrades",
+};
+
+function encodeEvent(event: any): string {
+  return `data: ${JSON.stringify(event)}\n\n`;
 }
 
-// Determine which tool to call based on user message
-function detectTool(message: string): string | null {
-  const lower = message.toLowerCase();
-  if (
-    lower.includes("summary") ||
-    lower.includes("portfolio") ||
-    lower.includes("overview") ||
-    lower.includes("total")
-  )
-    return "getPortfolioSummary";
-  if (lower.includes("balance") || lower.includes("holdings"))
-    return "getBalance";
-  if (
-    lower.includes("price") ||
-    lower.includes("ticker") ||
-    lower.includes("market")
-  )
-    return "getTicker";
-  if (lower.includes("open order") || lower.includes("pending"))
-    return "getOpenOrders";
-  if (
-    lower.includes("trade") ||
-    lower.includes("history") ||
-    lower.includes("fill")
-  )
-    return "getTradeHistory";
-  return null;
-}
-
-// Encode an event as SSE — supports both JSON stream and SSE based on Accept header
-function encodeEvent(event: any, useSSE: boolean): string {
-  const json = JSON.stringify(event);
-  if (useSSE) {
-    return `event: ${event.type}\ndata: ${json}\n\n`;
-  }
-  return `data: ${json}\n\n`;
-}
-
-// AG-UI compatible endpoint
+// AG-UI compatible endpoint with OpenAI GPT-4o
 app.post("/awp", async (req, res) => {
-  const accept = req.headers.accept || "";
-  const useSSE = accept.includes("text/event-stream");
-
-  console.log("[AG-UI] Accept header:", accept);
-  console.log("[AG-UI] Request body keys:", Object.keys(req.body || {}));
+  console.log("[AG-UI] Request received");
 
   const { threadId, runId, messages } = req.body;
 
-  // SSE headers
-  res.setHeader("Content-Type", useSSE ? "text/event-stream" : "text/event-stream");
+  res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
@@ -189,98 +116,142 @@ app.post("/awp", async (req, res) => {
   const currentThreadId = threadId || uuidv4();
 
   const write = (event: any) => {
-    const encoded = encodeEvent(event, useSSE);
-    console.log("[AG-UI] Sending event:", event.type);
-    res.write(encoded);
+    console.log("[AG-UI] Sending:", event.type);
+    res.write(encodeEvent(event));
   };
 
-  // RUN_STARTED
   write({
     type: "RUN_STARTED",
     threadId: currentThreadId,
     runId: currentRunId,
   });
 
-  let hasError = false;
-
   try {
-    // Get the last user message — handle string, array, and object content formats
-    const userMsg = [...(messages || [])]
-      .reverse()
-      .find((m: any) => m.role === "user");
-    let userText = "portfolio summary";
-    if (userMsg) {
-      if (typeof userMsg.content === "string") {
-        userText = userMsg.content;
-      } else if (Array.isArray(userMsg.content)) {
-        // Could be [{type: "text", text: "..."}] or just strings
-        for (const part of userMsg.content) {
-          if (typeof part === "string") {
-            userText = part;
-            break;
-          } else if (part?.type === "text" && part?.text) {
-            userText = part.text;
-            break;
+    // Build OpenAI messages from conversation history
+    const openaiMessages: OpenAI.ChatCompletionMessageParam[] = [
+      {
+        role: "system",
+        content: `You are Kraken AI, a crypto portfolio assistant connected to a live Kraken exchange account. You help users check their portfolio, view prices, review orders, and see trade history.
+
+When the user asks about their portfolio/holdings/value, call getPortfolioSummary.
+When they ask about prices/market, call getTicker.
+When they ask about open/pending orders, call getOpenOrders.
+When they ask about trade history/recent trades, call getTradeHistory.
+
+After calling a tool, provide a brief natural language summary. The actual data will be rendered as a rich interactive widget in the UI, so keep your text response concise and conversational — don't repeat all the numbers.
+
+Be friendly, concise, and helpful. Use emoji sparingly.`,
+      },
+    ];
+
+    // Add conversation history
+    for (const msg of messages || []) {
+      if (msg.role === "user") {
+        let text = "";
+        if (typeof msg.content === "string") {
+          text = msg.content;
+        } else if (Array.isArray(msg.content)) {
+          for (const part of msg.content) {
+            if (typeof part === "string") { text = part; break; }
+            if (part?.type === "text" && part?.text) { text = part.text; break; }
           }
+        } else if (msg.content?.text) {
+          text = msg.content.text;
         }
-      } else if (typeof userMsg.content === "object" && userMsg.content?.text) {
-        userText = userMsg.content.text;
+        if (text) openaiMessages.push({ role: "user", content: text });
+      } else if (msg.role === "assistant" && typeof msg.content === "string") {
+        openaiMessages.push({ role: "assistant", content: msg.content });
       }
     }
-    console.log("[AG-UI] User text:", userText);
-    console.log("[AG-UI] Message structure:", JSON.stringify(userMsg).slice(0, 300));
 
-    // Detect tool
-    const toolName = detectTool(userText) || "getPortfolioSummary";
-    console.log("[AG-UI] Detected tool:", toolName);
+    console.log("[AG-UI] Sending to OpenAI, messages:", openaiMessages.length);
 
-    // Execute tool
-    const toolResult = await executeTool(toolName, {});
-    console.log("[AG-UI] Tool result keys:", Object.keys(toolResult || {}));
-
-    // Generate text response
-    const responseText =
-      generateResponse(toolName, toolResult) ||
-      "Here's your data: " + JSON.stringify(toolResult, null, 2);
-
-    const messageId = uuidv4();
-
-    // TEXT_MESSAGE_START
-    write({
-      type: "TEXT_MESSAGE_START",
-      messageId,
-      role: "assistant",
+    // First OpenAI call - may produce tool calls
+    let completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: openaiMessages,
+      tools: OPENAI_TOOLS,
+      tool_choice: "auto",
     });
 
-    // Stream text in chunks
-    const chunkSize = 50;
+    let choice = completion.choices[0];
+    let toolCallsMade: Array<{ name: string; result: any }> = [];
+
+    // Process tool calls if any
+    if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
+      // Add assistant message with tool calls to context
+      openaiMessages.push(choice.message);
+
+      for (const toolCall of choice.message.tool_calls) {
+        const fnName = toolCall.function.name;
+        const fnArgs = JSON.parse(toolCall.function.arguments || "{}");
+
+        console.log("[AG-UI] OpenAI wants tool:", fnName, fnArgs);
+
+        // Execute the tool
+        const result = await executeTool(fnName, fnArgs);
+        toolCallsMade.push({ name: fnName, result });
+
+        // Add tool result to context for the follow-up
+        openaiMessages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(result),
+        });
+
+        // Emit AG-UI tool call events for frontend rendering
+        const widgetAction = TOOL_TO_WIDGET[fnName];
+        if (widgetAction) {
+          const toolCallId = uuidv4();
+          write({
+            type: "TOOL_CALL_START",
+            toolCallId,
+            toolCallName: widgetAction,
+          });
+          write({
+            type: "TOOL_CALL_ARGS",
+            toolCallId,
+            delta: JSON.stringify({ data: result }),
+          });
+          write({
+            type: "TOOL_CALL_END",
+            toolCallId,
+          });
+        }
+      }
+
+      // Second OpenAI call to get natural language summary
+      completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: openaiMessages,
+      });
+      choice = completion.choices[0];
+    }
+
+    // Stream the text response
+    const responseText = choice.message.content || "Done!";
+    const messageId = uuidv4();
+
+    write({ type: "TEXT_MESSAGE_START", messageId, role: "assistant" });
+
+    const chunkSize = 40;
     for (let i = 0; i < responseText.length; i += chunkSize) {
-      const chunk = responseText.slice(i, i + chunkSize);
       write({
         type: "TEXT_MESSAGE_CONTENT",
         messageId,
-        delta: chunk,
+        delta: responseText.slice(i, i + chunkSize),
       });
     }
 
-    // TEXT_MESSAGE_END
-    write({
-      type: "TEXT_MESSAGE_END",
-      messageId,
-    });
+    write({ type: "TEXT_MESSAGE_END", messageId });
   } catch (err: any) {
-    hasError = true;
     console.error("[AG-UI] Error:", err.message);
-    console.error("[AG-UI] Stack:", err.stack);
-
-    // Send error as a text message instead of RUN_ERROR to avoid the "already errored" issue
     const messageId = uuidv4();
     write({ type: "TEXT_MESSAGE_START", messageId, role: "assistant" });
     write({ type: "TEXT_MESSAGE_CONTENT", messageId, delta: `❌ Error: ${err.message}` });
     write({ type: "TEXT_MESSAGE_END", messageId });
   }
 
-  // RUN_FINISHED — only if no RUN_ERROR was sent
   write({
     type: "RUN_FINISHED",
     threadId: currentThreadId,
@@ -304,7 +275,6 @@ app.post("/api/tool/:name", async (req, res) => {
   }
 });
 
-// Health check
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", tools: TOOLS.map((t) => t.name) });
 });
@@ -312,5 +282,5 @@ app.get("/health", (_req, res) => {
 app.listen(PORT, () => {
   console.log(`🐙 Kraken AG-UI Backend running on http://localhost:${PORT}`);
   console.log(`   AG-UI endpoint: POST /awp`);
-  console.log(`   Tools API: POST /api/tool/:name`);
+  console.log(`   OpenAI GPT-4o: ${process.env.OPENAI_API_KEY ? "configured ✓" : "MISSING ✗"}`);
 });
