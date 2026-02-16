@@ -1,26 +1,25 @@
-import { HttpAgent } from "@ag-ui/client";
 import {
   CopilotRuntime,
-  ExperimentalEmptyAdapter,
+  OpenAIAdapter,
   copilotRuntimeNextJSAppRouterEndpoint,
 } from "@copilotkit/runtime";
+import OpenAI from "openai";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:3001";
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export const POST = async (req: Request) => {
-  const agent = new HttpAgent({
-    url: `${BACKEND_URL}/awp`,
-  });
+  const runtime = new CopilotRuntime({});
 
-  const runtime = new CopilotRuntime({
-    agents: {
-      kraken: agent,
-    },
+  const serviceAdapter = new OpenAIAdapter({
+    openai,
+    model: "gpt-4o",
   });
 
   const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
     runtime,
-    serviceAdapter: new ExperimentalEmptyAdapter(),
+    serviceAdapter,
     endpoint: "/api/copilotkit",
   });
 

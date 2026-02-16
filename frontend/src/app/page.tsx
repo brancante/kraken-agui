@@ -95,7 +95,7 @@ function ChatPanel() {
         </p>
       </div>
       <div className="flex-1 overflow-hidden">
-        <CopilotKit runtimeUrl="/api/copilotkit" agent="kraken">
+        <CopilotKit runtimeUrl="/api/copilotkit">
           <ChatActions />
           <CopilotChat
             className="h-full"

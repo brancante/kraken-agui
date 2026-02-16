@@ -8,6 +8,20 @@ import { PriceCards } from "./PriceCards";
 import { OrderTable } from "./OrderTable";
 import { TradeHistory } from "./TradeHistory";
 
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
+
+async function callTool(name: string) {
+  const res = await fetch(`${BACKEND_URL}/api/tool/${name}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error);
+  return json.data;
+}
+
 function PinButton({ type, data }: { type: string; data: any }) {
   const { pinWidget, unpinWidget, isPinned, getPinnedId } = usePinContext();
   const pinned = isPinned(type);
@@ -32,19 +46,13 @@ function PinButton({ type, data }: { type: string; data: any }) {
 }
 
 export function ChatActions() {
-  // Portfolio summary action
   useCopilotAction({
     name: "showPortfolio",
-    description: "Display portfolio summary with allocation chart",
-    parameters: [
-      {
-        name: "data",
-        type: "object",
-        description: "Portfolio data from Kraken",
-      },
-    ],
-    render: ({ args, status }) => {
-      if (!args?.data) {
+    description:
+      "Show the user's full portfolio summary with asset allocation. Use when user asks about portfolio, balance, holdings, total value, or how their assets are doing.",
+    parameters: [],
+    render: ({ status, result }) => {
+      if (status === "executing") {
         return (
           <div className="flex items-center gap-2 text-kraken-muted text-sm py-2">
             <div className="animate-spin rounded-full h-4 w-4 border-2 border-kraken-purple border-t-transparent" />
@@ -52,107 +60,111 @@ export function ChatActions() {
           </div>
         );
       }
+      if (!result) return null;
       return (
-        <div className="space-y-3 my-2 -mx-2">
-          <PortfolioCard data={args.data} action={<PinButton type="portfolio" data={args.data} />} />
-          <DonutChart data={args.data} action={<PinButton type="donut" data={args.data} />} />
+        <div className="space-y-3 my-2">
+          <PortfolioCard
+            data={result}
+            action={<PinButton type="portfolio" data={result} />}
+          />
+          <DonutChart
+            data={result}
+            action={<PinButton type="donut" data={result} />}
+          />
         </div>
       );
     },
     handler: async () => {
-      // Backend handles execution; this is just for rendering
+      return await callTool("getPortfolioSummary");
     },
   });
 
-  // Prices action
   useCopilotAction({
     name: "showPrices",
-    description: "Display current market prices",
-    parameters: [
-      {
-        name: "data",
-        type: "object",
-        description: "Ticker data from Kraken",
-      },
-    ],
-    render: ({ args, status }) => {
-      if (!args?.data) {
+    description:
+      "Show current market prices for crypto assets. Use when user asks about prices, market, how much something costs, or ticker data.",
+    parameters: [],
+    render: ({ status, result }) => {
+      if (status === "executing") {
         return (
           <div className="flex items-center gap-2 text-kraken-muted text-sm py-2">
             <div className="animate-spin rounded-full h-4 w-4 border-2 border-kraken-purple border-t-transparent" />
-            Loading prices...
+            Fetching prices...
           </div>
         );
       }
+      if (!result) return null;
       return (
-        <div className="my-2 -mx-2">
-          <PriceCards data={args.data} action={<PinButton type="prices" data={args.data} />} />
+        <div className="my-2">
+          <PriceCards
+            data={result}
+            action={<PinButton type="prices" data={result} />}
+          />
         </div>
       );
     },
-    handler: async () => {},
+    handler: async () => {
+      return await callTool("getTicker");
+    },
   });
 
-  // Open orders action
   useCopilotAction({
     name: "showOrders",
-    description: "Display open orders",
-    parameters: [
-      {
-        name: "data",
-        type: "object",
-        description: "Open orders data from Kraken",
-      },
-    ],
-    render: ({ args, status }) => {
-      if (!args?.data) {
+    description:
+      "Show open/pending orders on Kraken. Use when user asks about open orders, pending orders, limit orders, or sell orders.",
+    parameters: [],
+    render: ({ status, result }) => {
+      if (status === "executing") {
         return (
           <div className="flex items-center gap-2 text-kraken-muted text-sm py-2">
             <div className="animate-spin rounded-full h-4 w-4 border-2 border-kraken-purple border-t-transparent" />
-            Loading orders...
+            Checking orders...
           </div>
         );
       }
-      // data might be an array or object with array
-      const orders = Array.isArray(args.data) ? args.data : [];
+      if (!result) return null;
       return (
-        <div className="my-2 -mx-2">
-          <OrderTable data={orders} action={<PinButton type="orders" data={orders} />} />
+        <div className="my-2">
+          <OrderTable
+            data={result}
+            action={<PinButton type="orders" data={result} />}
+          />
         </div>
       );
     },
-    handler: async () => {},
+    handler: async () => {
+      return await callTool("getOpenOrders");
+    },
   });
 
-  // Trade history action
   useCopilotAction({
     name: "showTrades",
-    description: "Display recent trade history",
-    parameters: [
-      {
-        name: "data",
-        type: "object",
-        description: "Trade history data from Kraken",
-      },
-    ],
-    render: ({ args, status }) => {
-      if (!args?.data) {
+    description:
+      "Show recent trade history/fills from Kraken. Use when user asks about trades, trade history, recent fills, or past transactions.",
+    parameters: [],
+    render: ({ status, result }) => {
+      if (status === "executing") {
         return (
           <div className="flex items-center gap-2 text-kraken-muted text-sm py-2">
             <div className="animate-spin rounded-full h-4 w-4 border-2 border-kraken-purple border-t-transparent" />
-            Loading trades...
+            Loading trade history...
           </div>
         );
       }
-      const trades = Array.isArray(args.data) ? args.data : [];
+      if (!result) return null;
       return (
-        <div className="my-2 -mx-2">
-          <TradeHistory data={trades} action={<PinButton type="trades" data={trades} />} />
+        <div className="my-2">
+          <TradeHistory
+            data={result}
+            action={<PinButton type="trades" data={result} />}
+          />
         </div>
       );
     },
-    handler: async () => {},
+    handler: async () => {
+      return await callTool("getTradeHistory");
+    },
   });
 
-  return null; // This component just registers actions
+  return null;
 }

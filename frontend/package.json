@@ -12,6 +12,7 @@
     "@copilotkit/react-core": "^1.51.0",
     "@copilotkit/react-ui": "^1.51.0",
     "@copilotkit/runtime": "^1.51.0",
+    "openai": "^4.80.0",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
