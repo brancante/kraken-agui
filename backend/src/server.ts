@@ -166,6 +166,7 @@ app.post("/awp", async (req, res) => {
     type: "RUN_STARTED",
     threadId: currentThreadId,
     runId: currentRunId,
+    status: "running",
   });
 
   try {
@@ -248,6 +249,7 @@ app.post("/awp", async (req, res) => {
     type: "RUN_FINISHED",
     threadId: currentThreadId,
     runId: currentRunId,
+    status: "complete",
   });
 
   res.end();
