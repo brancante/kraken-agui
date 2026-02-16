@@ -188,17 +188,20 @@ app.post("/awp", async (req, res) => {
   const currentRunId = runId || uuidv4();
   const currentThreadId = threadId || uuidv4();
 
+  const write = (event: any) => {
+    const encoded = encodeEvent(event, useSSE);
+    console.log("[AG-UI] Sending event:", event.type);
+    res.write(encoded);
+  };
+
   // RUN_STARTED
-  res.write(
-    encodeEvent(
-      {
-        type: "RUN_STARTED",
-        threadId: currentThreadId,
-        runId: currentRunId,
-      },
-      useSSE
-    )
-  );
+  write({
+    type: "RUN_STARTED",
+    threadId: currentThreadId,
+    runId: currentRunId,
+  });
+
+  let hasError = false;
 
   try {
     // Get the last user message — handle string, array, and object content formats
@@ -210,90 +213,79 @@ app.post("/awp", async (req, res) => {
       if (typeof userMsg.content === "string") {
         userText = userMsg.content;
       } else if (Array.isArray(userMsg.content)) {
-        const textPart = userMsg.content.find((p: any) => p.type === "text");
-        userText = textPart?.text || textPart?.content || "portfolio summary";
+        // Could be [{type: "text", text: "..."}] or just strings
+        for (const part of userMsg.content) {
+          if (typeof part === "string") {
+            userText = part;
+            break;
+          } else if (part?.type === "text" && part?.text) {
+            userText = part.text;
+            break;
+          }
+        }
       } else if (typeof userMsg.content === "object" && userMsg.content?.text) {
         userText = userMsg.content.text;
       }
     }
     console.log("[AG-UI] User text:", userText);
+    console.log("[AG-UI] Message structure:", JSON.stringify(userMsg).slice(0, 300));
 
     // Detect tool
     const toolName = detectTool(userText) || "getPortfolioSummary";
+    console.log("[AG-UI] Detected tool:", toolName);
 
     // Execute tool
     const toolResult = await executeTool(toolName, {});
+    console.log("[AG-UI] Tool result keys:", Object.keys(toolResult || {}));
 
     // Generate text response
     const responseText =
       generateResponse(toolName, toolResult) ||
-      `Here's the data:\n\n\`\`\`json\n${JSON.stringify(toolResult, null, 2)}\n\`\`\``;
+      "Here's your data: " + JSON.stringify(toolResult, null, 2);
 
     const messageId = uuidv4();
 
     // TEXT_MESSAGE_START
-    res.write(
-      encodeEvent(
-        {
-          type: "TEXT_MESSAGE_START",
-          messageId,
-          role: "assistant",
-        },
-        useSSE
-      )
-    );
+    write({
+      type: "TEXT_MESSAGE_START",
+      messageId,
+      role: "assistant",
+    });
 
     // Stream text in chunks
     const chunkSize = 50;
     for (let i = 0; i < responseText.length; i += chunkSize) {
       const chunk = responseText.slice(i, i + chunkSize);
-      res.write(
-        encodeEvent(
-          {
-            type: "TEXT_MESSAGE_CONTENT",
-            messageId,
-            delta: chunk,
-          },
-          useSSE
-        )
-      );
+      write({
+        type: "TEXT_MESSAGE_CONTENT",
+        messageId,
+        delta: chunk,
+      });
     }
 
     // TEXT_MESSAGE_END
-    res.write(
-      encodeEvent(
-        {
-          type: "TEXT_MESSAGE_END",
-          messageId,
-        },
-        useSSE
-      )
-    );
+    write({
+      type: "TEXT_MESSAGE_END",
+      messageId,
+    });
   } catch (err: any) {
+    hasError = true;
     console.error("[AG-UI] Error:", err.message);
-    // RUN_ERROR
-    res.write(
-      encodeEvent(
-        {
-          type: "RUN_ERROR",
-          message: err.message,
-        },
-        useSSE
-      )
-    );
+    console.error("[AG-UI] Stack:", err.stack);
+
+    // Send error as a text message instead of RUN_ERROR to avoid the "already errored" issue
+    const messageId = uuidv4();
+    write({ type: "TEXT_MESSAGE_START", messageId, role: "assistant" });
+    write({ type: "TEXT_MESSAGE_CONTENT", messageId, delta: `❌ Error: ${err.message}` });
+    write({ type: "TEXT_MESSAGE_END", messageId });
   }
 
-  // RUN_FINISHED
-  res.write(
-    encodeEvent(
-      {
-        type: "RUN_FINISHED",
-        threadId: currentThreadId,
-        runId: currentRunId,
-      },
-      useSSE
-    )
-  );
+  // RUN_FINISHED — only if no RUN_ERROR was sent
+  write({
+    type: "RUN_FINISHED",
+    threadId: currentThreadId,
+    runId: currentRunId,
+  });
 
   res.end();
 });
