@@ -151,6 +151,8 @@ function detectTool(message: string): string | null {
 
 // AG-UI compatible endpoint
 app.post("/awp", async (req, res) => {
+  console.log("[AG-UI] Request body keys:", Object.keys(req.body || {}));
+  console.log("[AG-UI] Full body:", JSON.stringify(req.body).slice(0, 500));
   const { threadId, runId, messages } = req.body;
 
   // SSE headers
@@ -170,9 +172,19 @@ app.post("/awp", async (req, res) => {
   });
 
   try {
-    // Get the last user message
+    // Get the last user message — handle both string and array content formats
     const userMsg = [...(messages || [])].reverse().find((m: any) => m.role === "user");
-    const userText = userMsg?.content || "portfolio summary";
+    let userText = "portfolio summary";
+    if (userMsg) {
+      if (typeof userMsg.content === "string") {
+        userText = userMsg.content;
+      } else if (Array.isArray(userMsg.content)) {
+        const textPart = userMsg.content.find((p: any) => p.type === "text");
+        userText = textPart?.text || "portfolio summary";
+      }
+    }
+    console.log("[AG-UI] User message:", JSON.stringify(userMsg?.content).slice(0, 200));
+    console.log("[AG-UI] Parsed text:", userText);
 
     // Detect tool
     const toolName = detectTool(userText) || "getPortfolioSummary";
@@ -182,7 +194,7 @@ app.post("/awp", async (req, res) => {
     const toolResult = await executeTool(toolName, {});
 
     // Generate text response
-    const responseText = generateResponse(toolName, toolResult);
+    const responseText = generateResponse(toolName, toolResult) || `Here's the raw data:\n\n\`\`\`json\n${JSON.stringify(toolResult, null, 2)}\n\`\`\``;
     const messageId = uuidv4();
 
     // TEXT_MESSAGE_START
