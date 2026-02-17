@@ -19,7 +19,7 @@ interface Props {
 
 export function TradeHistory({ data, action }: Props) {
   return (
-    <div className="bg-kraken-card rounded-xl p-5 border border-kraken-border">
+    <div className="bg-kraken-card rounded-xl p-5 border border-kraken-border h-full">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-kraken-muted uppercase tracking-wider">
           📜 Recent Trades

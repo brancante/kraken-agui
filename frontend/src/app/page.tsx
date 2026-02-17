@@ -52,7 +52,7 @@ function Dashboard() {
           </span>
         </h1>
         <p className="text-kraken-muted text-sm mt-1">
-          Real-time portfolio powered by GPT-4o + AG-UI
+          Real-time portfolio dashboard
         </p>
       </div>
 
@@ -73,9 +73,9 @@ function Dashboard() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 auto-rows-min">
           {pinnedWidgets.map((w) => (
-            <div key={w.id}>{renderWidget(w)}</div>
+            <div key={w.id} className="min-h-[280px]">{renderWidget(w)}</div>
           ))}
         </div>
       )}
@@ -91,7 +91,7 @@ function ChatPanel() {
           🤖 Kraken AI Assistant
         </h2>
         <p className="text-xs text-kraken-muted mt-1">
-          Powered by GPT-4o — ask about your portfolio, prices, orders, or trades
+          Ask about your portfolio, prices, orders, or trades
         </p>
       </div>
       <div className="flex-1 overflow-hidden">
@@ -108,12 +108,13 @@ CRITICAL RULES:
 - ALWAYS call a tool when the user asks about trades, history, fills, transactions → call showTrades
 - If unsure which tool, call showPortfolio
 - NEVER just respond with text when you could use a tool instead
-- After calling a tool, give a brief conversational summary of what the data shows
+- ABSOLUTELY CRITICAL: When you call ANY tool, you MUST NOT produce ANY text content at all. Zero text. Empty. The tool automatically renders a beautiful interactive UI widget — that IS the complete answer. Any text you add will be duplicated and ugly. Your entire response when calling a tool must be ONLY the tool call, with NO accompanying text whatsoever. Not even "Here's your data" or "Done".
+- ONLY respond with text for casual conversation where NO tool is called.
 - Be friendly, concise, use emoji sparingly`}
             labels={{
               title: "Kraken Assistant",
               initial:
-                "Hi! I'm your Kraken AI assistant powered by GPT-4o. I can help you with:\n\n• 💰 Portfolio summary & allocation\n• 💹 Live market prices\n• 📋 Open orders\n• 📜 Trade history\n\nJust ask naturally — like \"How's my portfolio doing?\" or \"What's the price of ETH?\"",
+                "Hi! I'm your Kraken AI assistant. I can help you with:\n\n• 💰 Portfolio summary & allocation\n• 💹 Live market prices\n• 📋 Open orders\n• 📜 Trade history\n\nJust ask naturally — like \"How's my portfolio doing?\" or \"What's the price of ETH?\"",
             }}
           />
         </CopilotKit>

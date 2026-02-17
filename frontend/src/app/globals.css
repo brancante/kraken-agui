@@ -35,3 +35,10 @@ body {
 .recharts-text {
   fill: #8B949E !important;
 }
+
+/* Standardize component sizes in chat and dashboard */
+.copilotKitMessage .bg-kraken-card,
+[class*="copilot"] .bg-kraken-card {
+  width: 100%;
+  max-width: 100%;
+}

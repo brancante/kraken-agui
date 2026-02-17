@@ -138,7 +138,7 @@ When they ask about prices/market, call getTicker.
 When they ask about open/pending orders, call getOpenOrders.
 When they ask about trade history/recent trades, call getTradeHistory.
 
-After calling a tool, provide a brief natural language summary. The actual data will be rendered as a rich interactive widget in the UI, so keep your text response concise and conversational — don't repeat all the numbers.
+CRITICAL: When you call a tool, DO NOT produce any text response at all. The data is rendered as a rich interactive UI widget automatically. Any text you add will be duplicate and ugly. Your response when using tools must contain ONLY the tool calls, zero text.
 
 Be friendly, concise, and helpful. Use emoji sparingly.`,
       },
@@ -228,22 +228,24 @@ Be friendly, concise, and helpful. Use emoji sparingly.`,
       choice = completion.choices[0];
     }
 
-    // Stream the text response
-    const responseText = choice.message.content || "Done!";
-    const messageId = uuidv4();
+    // Only stream text response if no tool calls were made (component-only answers)
+    if (toolCallsMade.length === 0) {
+      const responseText = choice.message.content || "Done!";
+      const messageId = uuidv4();
 
-    write({ type: "TEXT_MESSAGE_START", messageId, role: "assistant" });
+      write({ type: "TEXT_MESSAGE_START", messageId, role: "assistant" });
 
-    const chunkSize = 40;
-    for (let i = 0; i < responseText.length; i += chunkSize) {
-      write({
-        type: "TEXT_MESSAGE_CONTENT",
-        messageId,
-        delta: responseText.slice(i, i + chunkSize),
-      });
+      const chunkSize = 40;
+      for (let i = 0; i < responseText.length; i += chunkSize) {
+        write({
+          type: "TEXT_MESSAGE_CONTENT",
+          messageId,
+          delta: responseText.slice(i, i + chunkSize),
+        });
+      }
+
+      write({ type: "TEXT_MESSAGE_END", messageId });
     }
-
-    write({ type: "TEXT_MESSAGE_END", messageId });
   } catch (err: any) {
     console.error("[AG-UI] Error:", err.message);
     const messageId = uuidv4();

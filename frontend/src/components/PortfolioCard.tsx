@@ -18,7 +18,7 @@ interface Props {
 
 export function PortfolioCard({ data, action }: Props) {
   return (
-    <div className="bg-kraken-card rounded-xl p-5 border border-kraken-border">
+    <div className="bg-kraken-card rounded-xl p-5 border border-kraken-border h-full">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-kraken-muted uppercase tracking-wider">
           💰 Portfolio Value
@@ -54,6 +54,23 @@ export function PortfolioCard({ data, action }: Props) {
             </div>
           );
         })}
+      </div>
+      {/* Allocation bar chart */}
+      <div className="mt-4 flex h-3 rounded-full overflow-hidden">
+        {data.assets
+          .filter((a) => a.usdValue > 0)
+          .map((a, i) => {
+            const pct = data.totalUsd > 0 ? (a.usdValue / data.totalUsd) * 100 : 0;
+            const colors = ["#7B61FF", "#00C076", "#FF4D4D", "#FFB020", "#00B4D8", "#FF6B9D"];
+            return (
+              <div
+                key={a.asset}
+                className="h-full transition-all"
+                style={{ width: `${pct}%`, background: colors[i % colors.length] }}
+                title={`${a.asset}: ${pct.toFixed(1)}%`}
+              />
+            );
+          })}
       </div>
       <div className="mt-3 text-xs text-kraken-muted">
         Updated: {new Date(data.updatedAt).toLocaleTimeString()}
